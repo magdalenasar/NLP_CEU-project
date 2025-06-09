@@ -22,7 +22,17 @@ def extract_year_from_text(text_content):
     return int(match.group(0)) if match else None
 
 def get_sentiment_score(text):
-    return sentiment_analyzer.polarity_scores(text)['compound'] if isinstance(text, str) else 0
+    if not isinstance(text, str):
+        return 'neutral'  # Or handle as an error/None, depending on desired behavior
+
+    compound_score = sentiment_analyzer.polarity_scores(text)['compound']
+
+    if compound_score >= 0.05:
+        return 'positive'
+    elif compound_score <= -0.05:
+        return 'negative'
+    else:
+        return 'neutral'
 
 def preprocess_text_for_nlp(text):
     if not isinstance(text, str): return ""
