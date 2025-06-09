@@ -1,0 +1,58 @@
+!pip install pandas pdfplumber spacy vaderSentiment -q
+!python -m spacy download en_core_web_sm -q
+
+import os
+import re
+import pandas as pd
+import pdfplumber
+import spacy
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from google.colab import drive
+from IPython.display import display
+
+PDF_DIRECTORY = '/content/drive/MyDrive/PDF_Reports/'
+OUTPUT_CSV_PATH = '/content/drive/MyDrive/final_analyzed_reports.csv'
+
+nlp = spacy.load('en_core_web_sm', disable=['parser', 'ner'])
+sentiment_analyzer = SentimentIntensityAnalyzer()
+
+def extract_year_from_text(text_content):
+    if not isinstance(text_content, str): return None
+    match = re.search(r'\b(19[89]\d|20[0-2]\d)\b', text_content)
+    return int(match.group(0)) if match else None
+
+def get_sentiment_score(text):
+    return sentiment_analyzer.polarity_scores(text)['compound'] if isinstance(text, str) else 0
+
+def preprocess_text_for_nlp(text):
+    if not isinstance(text, str): return ""
+    doc = nlp(text)
+    return " ".join([token.lemma_.lower() for token in doc if not token.is_stop and not token.is_punct and token.is_alpha])
+
+pdf_files = [f for f in os.listdir(PDF_DIRECTORY) if f.endswith('.pdf')]
+
+all_reports_data = []
+for filename in pdf_files:
+    full_path = os.path.join(PDF_DIRECTORY, filename)
+    raw_text = ""
+    first_page_text = ""
+    with pdfplumber.open(full_path) as pdf:
+        if pdf.pages:
+            first_page_text = pdf.pages[0].extract_text() or ""
+            raw_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
+
+    all_reports_data.append({
+        'filename': filename,
+        'year': extract_year_from_text(first_page_text),
+        'sentiment': get_sentiment_score(raw_text),
+        'raw_text': raw_text,
+        'processed_text': preprocess_text_for_nlp(raw_text)
+    })
+
+final_df = pd.DataFrame(all_reports_data)
+
+missing_years = final_df[final_df['year'].isnull()]
+
+final_df.to_csv(OUTPUT_CSV_PATH, index=False)
+
+display(final_df.head())
